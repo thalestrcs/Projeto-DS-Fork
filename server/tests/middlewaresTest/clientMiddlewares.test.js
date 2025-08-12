@@ -1,4 +1,4 @@
-const { validateRegisterClient, validateGetClient } = require('../../middlewares/clientMiddlewares');
+const { validateRegisterClient, validateGetClient, validateUpdateClientTags } = require('../../middlewares/clientMiddlewares');
 
 describe('validateRegisterClient middleware', () => {
     let req, res, next;
@@ -70,4 +70,67 @@ describe('validateGetClient middleware', () => {
         expect(res.status).not.toHaveBeenCalled();
         expect(res.json).not.toHaveBeenCalled();
     });
+});
+
+describe('validateUpdateClientTags middleware', () => {
+    let req, res, next; 
+
+    beforeEach( () => {
+        req = { cookies: {}, body: {}};
+        res = { 
+            status: jest.fn().mockReturnThis(), 
+            json: jest.fn()
+        };
+        next = jest.fn();
+    }); 
+
+    it('Deve retornar 401 se o id não for inserido', () => {
+        validateUpdateClientTags(req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Não autenticado para atualizar tags.' });
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    // Lista com alguns casos que devem retornar erro: tags indefinidas e tags nulas.
+    const errorCases = [ { cookies: {clientId: 123}, body: {} }, 
+        { cookies: {clientId: 123}, body: {tags: null} }];
+
+    // Testará cada caso de erro
+    test.each(errorCases)(
+        'Deve retornar 400 se as tags forem undefined ou null',
+        (cases) => {
+            req.body = cases.body;
+            req.cookies = cases.cookies;
+
+            validateUpdateClientTags(req, res, next);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith({ error: 'O campo de tags é obrigatório.' });
+            expect(next).not.toHaveBeenCalled();
+        }
+    );
+
+    it('Deve retornar 400 se as tags forem vazias', () => {
+        req.body = { tags: "" };
+        req.cookies = { clientId: 123};
+
+        validateUpdateClientTags(req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Por favor, insira pelo menos uma tag.' });
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('Deve chamar next() se todos os campos forem preenchidos', () => {
+        req.body = { tags: "vegano, musica, jantar, café, almoço" };
+        req.cookies = { clientId: 123};
+
+        validateUpdateClientTags(req, res, next);
+
+        expect(next).toHaveBeenCalled();
+        expect(res.status).not.toHaveBeenCalled();
+        expect(res.json).not.toHaveBeenCalled();
+    });
+
 });

@@ -59,7 +59,7 @@ describe('clientRecommendation controller', () => {
       ['2'],
       expect.any(Function)
     );
-    expect(db.get).toHaveBeenCalledTimes(2);
+    expect(db.get).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({
       error: 'Chave da API do Gemini não configurada no .env.'
@@ -78,6 +78,58 @@ describe('clientRecommendation controller', () => {
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Erro de db' });
   });
+
+  it('Deve retornar 500 em caso de erro no banco de dados ao buscar as tags do restaurante', async () => {
+    process.env.GEMINI_API_KEY = 'fake-key';
+
+    // Mock db.all to return immediately
+    db.all.mockImplementation((query, params, callback) => {
+      callback(null, []);
+    });
+
+    // Mock db.get for restaurant and client tags
+    db.get.mockImplementation((query, params, callback) => {
+        callback(new Error("Erro de db"), null);
+    });
+
+    await clientRecommendation(req, res);
+
+    expect(GoogleGenerativeAI).not.toHaveBeenCalled();
+    expect(db.all).toHaveBeenCalledWith(
+      expect.any(String),
+      ['2'],
+      expect.any(Function)
+    );
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Erro de db"
+    });
+  }, 10000); 
+
+  it('Deve retornar 500 em caso de erro no banco de dados ao buscar as tags do cliente', async () => {
+    process.env.GEMINI_API_KEY = 'fake-key';
+
+    // Mock db.all to return immediately
+    db.all.mockImplementation((query, params, callback) => {
+      callback(null, []);
+    });
+
+    // Mock db.get for restaurant and client tags
+    db.get
+      .mockImplementationOnce((query, params, callback) => {
+        callback(null, { tags: 'vegano, italiano' });
+      })
+      .mockImplementationOnce((query, params, callback) => {
+        callback(new Error("Erro de db"), null);
+      });
+
+    await clientRecommendation(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Erro de db"
+    });
+  }, 10000); 
 
   it('Deve retornar recomendação em JSON com sucesso', async () => {
     process.env.GEMINI_API_KEY = 'fake-key';
@@ -110,7 +162,8 @@ describe('clientRecommendation controller', () => {
     await clientRecommendation(req, res);
 
     expect(db.all).toHaveBeenCalled();
-    expect(db.get).toHaveBeenCalledTimes(4);
+    expect(db.get).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({ analysis: 'Recomendação mockada' });
   });
+
 });

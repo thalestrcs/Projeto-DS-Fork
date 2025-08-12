@@ -1,4 +1,4 @@
-const { getReportHistory, downloadReport } = require('../../controllers/reportController');
+const { getReportsHistory, getReportById } = require('../../controllers/reportController');
 const { db } = require('../../models/db');
 const PDFDocument = require('pdfkit');
 
@@ -10,11 +10,11 @@ beforeAll(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
-describe('getReportHistory controller', () => {
+describe('getReportsHistory controller', () => {
   let req, res;
 
   beforeEach(() => {
-    req = { query: { restaurantId: '1' } };
+    req = { cookies: { restaurantId: '1' } };
     res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn()
@@ -26,7 +26,7 @@ describe('getReportHistory controller', () => {
       callback(new Error('Erro de db'), null);
     });
 
-    getReportHistory(req, res);
+    getReportsHistory(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno no servidor.' });
@@ -34,14 +34,14 @@ describe('getReportHistory controller', () => {
 
   it('Deve retornar histórico de relatórios', () => {
     const mockReports = [
-      { id: '1', date: '2025-07-07T10:00:00Z' },
-      { id: '2', date: '2025-07-06T10:00:00Z' }
+      { id: '1', created_at: '2025-07-07T10:00:00Z' },
+      { id: '2', created_at: '2025-07-06T10:00:00Z' }
     ];
     db.all.mockImplementation((query, params, callback) => {
       callback(null, mockReports);
     });
 
-    getReportHistory(req, res);
+    getReportsHistory(req, res);
 
     expect(db.all).toHaveBeenCalledWith(
       expect.any(String),
@@ -52,11 +52,11 @@ describe('getReportHistory controller', () => {
   });
 });
 
-describe('downloadReport controller', () => {
+describe('getReportById controller', () => {
   let req, res;
 
   beforeEach(() => {
-    req = { body: { reportId: '1' } };
+    req = { params: { reportId: '1' }, cookies: { restaurantId: '2' } };
     res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
@@ -70,10 +70,10 @@ describe('downloadReport controller', () => {
       callback(new Error('Erro de db'), null);
     });
 
-    await downloadReport(req, res);
+    await getReportById(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno ao baixar relatório.' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno ao processar o relatório.' });
   });
 
   it('Deve retornar 404 se o relatório não for encontrado', async () => {
@@ -81,10 +81,10 @@ describe('downloadReport controller', () => {
       callback(null, null);
     });
 
-    await downloadReport(req, res);
+    await getReportById(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Relatório não encontrado.' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'Relatório não encontrado ou acesso não permitido.' });
   });
 
 });

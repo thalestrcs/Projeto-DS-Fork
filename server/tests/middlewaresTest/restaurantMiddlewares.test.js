@@ -1,4 +1,4 @@
-const {idCookieRestaurant, idQueryRestaurant, validateGetTag, idBodyRestaurant, validateSubmitReview, validateRegisterRestaurant} = require('../../middlewares/restaurantMiddlewares');
+const {idCookieRestaurant, idQueryRestaurant, validateGetTag, idBodyRestaurant, validateSubmitReview, validateRegisterRestaurant, validateUpdateRestaurantTags} = require('../../middlewares/restaurantMiddlewares');
 
 describe('validateRegisterRestaurant middleware', () => {
     let req, res, next;
@@ -31,7 +31,7 @@ describe('validateRegisterRestaurant middleware', () => {
     );
 
     it('Deve chamar next() se todos os campos forem preenchidos', () => {
-        req.body = { restaurantName: 'Marcus Pizza', cnpj: 123, email: 'marcus@gmail', password: 12345678 };
+        req.body = { restaurantName: 'Marcus Pizza', cnpj: 123, email: 'marcus@gmail', password: 12345678, endereco: "Rua H", telefone: 80028922 };
 
         validateRegisterRestaurant(req, res, next);
 
@@ -149,6 +149,131 @@ describe('validateSubmitReview middleware', () => {
         req.body = { restaurantId: 123, reviewerName: 'name', rating: 5 };
 
         validateSubmitReview(req, res, next);
+
+        expect(next).toHaveBeenCalled();
+        expect(res.status).not.toHaveBeenCalled();
+        expect(res.json).not.toHaveBeenCalled();
+    });
+});
+
+describe('validateUpdateRestaurantTags middleware', () => {
+    let req, res, next; 
+
+    beforeEach( () => {
+        req = { cookies: {}, body: {}};
+        res = { 
+            status: jest.fn().mockReturnThis(), 
+            json: jest.fn()
+        };
+        next = jest.fn();
+    }); 
+
+    it('Deve retornar 401 se o id não for inserido', () => {
+        validateUpdateRestaurantTags(req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Não autenticado para atualizar tags.' });
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    // Lista com alguns casos que devem retornar erro: tags indefinidas e tags nulas.
+    const errorCases = [ { cookies: {restaurantId: 123}, body: {} }, 
+        { cookies: {restaurantId: 123}, body: {tags: null} }];
+
+    // Testará cada caso de erro
+    test.each(errorCases)(
+        'Deve retornar 400 se as tags forem undefined ou null',
+        (cases) => {
+            req.body = cases.body;
+            req.cookies = cases.cookies;
+
+            validateUpdateRestaurantTags(req, res, next);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith({ error: 'O campo de tags é obrigatório.' });
+            expect(next).not.toHaveBeenCalled();
+        }
+    );
+
+    it('Deve retornar 400 se as tags forem vazias', () => {
+        req.body = { tags: "" };
+        req.cookies = { restaurantId: 123};
+
+        validateUpdateRestaurantTags(req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Por favor, insira pelo menos uma tag.' });
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('Deve chamar next() se todos os campos forem preenchidos', () => {
+        req.body = { tags: "vegano, musica, jantar, café, almoço" };
+        req.cookies = { restaurantId: 123};
+
+        validateUpdateRestaurantTags(req, res, next);
+
+        expect(next).toHaveBeenCalled();
+        expect(res.status).not.toHaveBeenCalled();
+        expect(res.json).not.toHaveBeenCalled();
+    });
+
+});
+
+describe('idBodyRestaurant middleware', () => {
+    let req, res, next; 
+
+    beforeEach( () => {
+        req = { body: {}};
+        res = { 
+            status: jest.fn().mockReturnThis(), 
+            json: jest.fn()
+        };
+        next = jest.fn();
+    }); 
+
+    it('Deve retornar 400 se o id não for inserido', () => {
+        idBodyRestaurant(req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: 'ID do restaurante é obrigatório.' });
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('Deve chamar next() se o id for inserido', () => {
+        req.body = { restaurantId: 123 };
+
+        idBodyRestaurant(req, res, next);
+
+        expect(next).toHaveBeenCalled();
+        expect(res.status).not.toHaveBeenCalled();
+        expect(res.json).not.toHaveBeenCalled();
+    });
+});
+
+describe('validateGetTag middleware', () => {
+    let req, res, next; 
+
+    beforeEach( () => {
+        req = { query: {}};
+        res = { 
+            status: jest.fn().mockReturnThis(), 
+            json: jest.fn()
+        };
+        next = jest.fn();
+    }); 
+
+    it('Deve retornar 400 se o id não for inserido', () => {
+        validateGetTag(req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: 'ID do restaurante é obrigatório.' });
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('Deve chamar next() se o id for inserido', () => {
+        req.query = { id: 123 };
+
+        validateGetTag(req, res, next);
 
         expect(next).toHaveBeenCalled();
         expect(res.status).not.toHaveBeenCalled();

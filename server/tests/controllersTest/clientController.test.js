@@ -1,4 +1,4 @@
-const { registerClient, getCurrentClient } = require('../../controllers/clientController');
+const { registerClient, getCurrentClient, updateClientTags } = require('../../controllers/clientController');
 const { db } = require('../../models/db');
 const bcrypt = require('bcrypt');
 
@@ -77,8 +77,21 @@ describe('registerClient controller', () => {
         expect(res.json).toHaveBeenCalledWith({ error: 'Este email ou CPF já está registrado.' });
     });
 
+    it('Retorna 400 se forem informadas menos de 5 tags', async () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(null, null);
+        });
+
+        req.body = { tags: "vegano" };
+
+        await registerClient(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: 'É necessário informar no mínimo 5 tags.'});
+    });
+
     it('Retorna 201 caso o cadastro tenha sido feito com sucesso', async () => {
-        req.body = { nome: 'João', sobrenome: 'Pedro', cpf: 12345678, telefone: 99999999, email: 'joao@gmail', senha: '123', tags: 'vegano, leal' };
+        req.body = { nome: 'João', sobrenome: 'Pedro', cpf: 12345678, telefone: 99999999, email: 'joao@gmail', senha: '123', tags: 'vegano, musica, café, almoço, janta' };
 
         db.get.mockImplementation((query, params, callback) => {
             callback(null, null);
@@ -106,5 +119,73 @@ describe('registerClient controller', () => {
 
         expect(res.status).toHaveBeenCalledWith(500);
         expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno no servidor.' });
+    });
+});
+
+describe('updateClientTags controller', () => {
+    let req, res;
+
+    beforeEach( () => {
+        req = { body: {}, cookies: {} };
+        res = {
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn()
+        };
+    });
+
+    it('Retorna 400 se forem informadas menos de 5 tags', async () => {
+        req.body = {tags: "vegano" };
+        req.cookies = { clientId: 123 };
+
+        await updateClientTags(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: 'É necessário informar no mínimo 5 tags.' });
+    });
+
+    it('Retorna 404 caso o cliente não tenha sido encontrado ou as tags não forem alteradas', async () => {
+        req.body = { tags: "vegano, musica, café, almoço, janta" };
+        req.cookies = { clientId: 123 };
+
+        db.run.mockImplementation((query, params, callback) => {
+            callback.call({changes: 0}, null);
+        });
+
+        await updateClientTags(req, res);
+
+        expect(db.run).toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Cliente não encontrado ou tags não foram alteradas.' });
+    });
+
+    it('Retorna 200 caso as tags sejam atualizadas com sucesso', async () => {
+        req.body = { tags: "vegano, musica, café, almoço, janta" };
+        req.cookies = { clientId: 123 };
+
+        db.run.mockImplementation((query, params, callback) => {
+            callback.call({changes: 1}, null);
+        });
+
+        await updateClientTags(req, res);
+
+        expect(db.run).toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Tags atualizadas com sucesso!',
+      updatedTags: expect.arrayContaining(["vegano", "musica", "café", "almoço", "janta"]),}));
+    });
+
+    it('Deve retornar 500 caso aconteça algum erro no banco de dados', async () => {
+        req.body = { tags: "vegano, musica, café, almoço, janta" };
+        req.cookies = { clientId: 123 };
+
+        db.run.mockImplementation((query, params, callback) => {
+            callback.call(null, new Error("Erro de db"));
+        });
+
+        await updateClientTags(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno do servidor ao atualizar tags.' });
     });
 });

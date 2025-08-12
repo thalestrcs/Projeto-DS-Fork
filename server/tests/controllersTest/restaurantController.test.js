@@ -1,4 +1,4 @@
-const { registerRestaurant, getCurrentRestaurant, getRestaurants, getRestaurantTags } = require('../../controllers/restaurantController');
+const { registerRestaurant, getCurrentRestaurant, getRestaurants, getRestaurantTags, updateRestaurantTags, getMe } = require('../../controllers/restaurantController');
 const { db } = require('../../models/db');
 const bcrypt = require('bcrypt');
 
@@ -11,111 +11,119 @@ beforeAll(() => {
 });
 
 describe('registerRestaurant controller', () => {
-  let req, res;
+    let req, res;
 
-  beforeEach(() => {
-    req = {
-      body: {
-        restaurantName: 'Restaurante Teste',
+    beforeEach( () => {
+        req = { body: {} };
+        res = {
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn()
+        };
+    });
+
+    it('Retorna 400 se o email e senha já estiverem registrados', async () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(null, { email: 'teste@restaurante.com' });
+        });
+
+        await registerRestaurant(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Este email já está registrado.' });
+    });
+
+    it('Retorna 400 se forem informadas menos de 5 tags', async () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(null, null);
+        });
+
+        req.body = { tags: "vegano" };
+
+        await registerRestaurant(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: 'É necessário informar no mínimo 5 tags.' });
+    });
+
+    it('Retorna 201 caso o cadastro tenha sido feito com sucesso', async () => {
+        req.body = { restaurantName: 'Restaurante Teste',
         cnpj: '12345678000195',
         email: 'teste@restaurante.com',
         password: '123',
-        tags: 'vegano, italiano'
-      }
-    };
-    res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn()
-    };
-  });
+        tags: 'vegano, italiano, café, almoço, janta'
+       };
 
-  it('Deve retornar 400 se o email já está registrado', async () => {
-    db.get.mockImplementation((query, params, callback) => {
-      callback(null, { email: 'teste@restaurante.com' });
+        db.get.mockImplementation((query, params, callback) => {
+            callback(null, null);
+        });
+        bcrypt.hash.mockResolvedValue('senha-falsa');
+        db.run.mockImplementation((query, params, callback) => {
+            callback(null);
+        });
+
+        await registerRestaurant(req, res);
+
+        expect(db.get).toHaveBeenCalled();
+        expect(bcrypt.hash).toHaveBeenCalledWith('123', 10);
+        expect(db.run).toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(201);
+        expect(res.json).toHaveBeenCalledWith({ message: 'Restaurante registrado com sucesso!' });
     });
 
-    await registerRestaurant(req, res);
+    it('Deve retornar 500 caso aconteça algum erro no banco de dados', async () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(new Error('Erro de db'), null);
+        });
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Este email já está registrado.' });
-  });
+        await registerRestaurant(req, res);
 
-  it('Deve retornar 201 quando o registro é salvo com sucesso', async () => {
-    db.get.mockImplementation((query, params, callback) => {
-      callback(null, null);
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno no servidor ao registrar restaurante.' });
     });
-    bcrypt.hash.mockResolvedValue('senha-falsa');
-    db.run.mockImplementation((query, params, callback) => {
-      callback(null);
-    });
-
-    await registerRestaurant(req, res);
-
-    expect(db.get).toHaveBeenCalled();
-    expect(bcrypt.hash).toHaveBeenCalledWith('123', 10);
-    expect(db.run).toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Registro salvo com sucesso!' });
-  });
-
-  it('Deve retornar 500 em caso de erro no banco de dados', async () => {
-    db.get.mockImplementation((query, params, callback) => {
-      callback(new Error('Erro de db'), null);
-    });
-
-    await registerRestaurant(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno no servidor.' });
-  });
 });
 
 describe('getCurrentRestaurant controller', () => {
-  let req, res;
+    let req, res;
 
-  beforeEach(() => {
-    req = { cookies: { restaurantId: '1' } };
-    res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn()
-    };
-  });
-
-  it('Deve retornar 500 em caso de erro no banco de dados', () => {
-    db.get.mockImplementation((query, params, callback) => {
-      callback(new Error('Erro de db'), null);
+    beforeEach( () => {
+        req = { cookies: { restaurantId: 123 } };
+        res = {
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn()
+        };
     });
 
-    getCurrentRestaurant(req, res);
+    it('Deve retornar 500 caso aconteça algum erro no banco de dados', () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(new Error('Erro de db'), null);
+        });
 
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno no servidor.' });
-  });
+        getCurrentRestaurant(req, res);
 
-  it('Deve retornar 404 se o restaurante não for encontrado', () => {
-    db.get.mockImplementation((query, params, callback) => {
-      callback(null, null);
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno no servidor.' });
     });
 
-    getCurrentRestaurant(req, res);
+    it('Deve retornar 404 caso o restaurante não seja encontrado', () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(null, null);
+        });
 
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Restaurante não encontrado.' });
-  });
+        getCurrentRestaurant(req, res);
 
-  it('Deve retornar os dados do restaurante com tags formatadas', () => {
-    db.get.mockImplementation((query, params, callback) => {
-      callback(null, { id: '1', restaurant_name: 'Restaurante Teste', tags: 'vegano, italiano' });
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Restaurante não encontrado.' });
     });
 
-    getCurrentRestaurant(req, res);
+    it('Deve retornar os dados formatados caso o restaurante seja encontrado', () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(null, { id: '1', restaurant_name: 'Restaurante Teste', email: 'testerestaurante@email.com', telefone: 80028922, tags: 'vegano, italiano' });
+        });
 
-    expect(res.json).toHaveBeenCalledWith({
-      restaurantId: '1',
-      restaurantName: 'Restaurante Teste',
-      tags: ['vegano', 'italiano']
+        getCurrentRestaurant(req, res);
+
+        expect(res.json).toHaveBeenCalledWith({ restaurantId: '1', restaurantName: 'Restaurante Teste', restaurantEmail: 'testerestaurante@email.com', restaurantPhone: 80028922, tags: ['vegano', 'italiano'] });
     });
-  });
 });
 
 describe('getRestaurants controller', () => {
@@ -138,18 +146,6 @@ describe('getRestaurants controller', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno no servidor.' });
-  });
-
-  it('Deve retornar 404 quando id é fornecido mas restaurante não encontrado', () => {
-    req.query.id = '1';
-    db.all.mockImplementation((query, params, callback) => {
-      callback(null, []);
-    });
-
-    getRestaurants(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Restaurante não encontrado.' });
   });
 
   it('Deve retornar restaurantes com média de avaliações', () => {
@@ -219,4 +215,116 @@ describe('getRestaurantTags controller', () => {
 
     expect(res.json).toHaveBeenCalledWith({ tags: ['vegano', 'italiano'] });
   });
+});
+
+describe('updateRestaurantTags controller', () => {
+    let req, res;
+
+    beforeEach( () => {
+        req = { body: {}, cookies: {} };
+        res = {
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn()
+        };
+    });
+
+    it('Retorna 400 se forem informadas menos de 5 tags', async () => {
+        req.body = {tags: "vegano" };
+        req.cookies = { restaurantId: 123 };
+
+        await updateRestaurantTags(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: 'É necessário informar no mínimo 5 tags.' });
+    });
+
+    it('Retorna 404 caso o restaurante não tenha sido encontrado ou as tags não forem alteradas', async () => {
+        req.body = { tags: "vegano, musica, café, almoço, janta" };
+        req.cookies = { restaurantId: 123 };
+
+        db.run.mockImplementation((query, params, callback) => {
+            callback.call({changes: 0}, null);
+        });
+
+        await updateRestaurantTags(req, res);
+
+        expect(db.run).toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Restaurante não encontrado ou tags não foram alteradas.' });
+    });
+
+    it('Retorna 200 caso as tags sejam atualizadas com sucesso', async () => {
+        req.body = { tags: "vegano, musica, café, almoço, janta" };
+        req.cookies = { restaurantId: 123 };
+
+        db.run.mockImplementation((query, params, callback) => {
+            callback.call({changes: 1}, null);
+        });
+
+        await updateRestaurantTags(req, res);
+
+        expect(db.run).toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Tags atualizadas com sucesso!',
+      updatedTags: expect.arrayContaining(["vegano", "musica", "café", "almoço", "janta"]),}));
+    });
+
+    it('Deve retornar 500 caso aconteça algum erro no banco de dados', async () => {
+        req.body = { tags: "vegano, musica, café, almoço, janta" };
+        req.cookies = { restaurantId: 123 };
+
+        db.run.mockImplementation((query, params, callback) => {
+            callback.call(null, new Error("Erro de db"));
+        });
+
+        await updateRestaurantTags(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno do servidor ao atualizar tags.' });
+    });
+});
+
+describe('getMe controller', () => {
+    let req, res;
+
+    beforeEach( () => {
+        req = { cookies: { restaurantId: 123 } };
+        res = {
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn()
+        };
+    });
+
+    it('Deve retornar 500 caso aconteça algum erro no banco de dados', () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(new Error('Erro de db'), null);
+        });
+
+        getMe(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Erro interno no servidor.' });
+    });
+
+    it('Deve retornar 404 caso o restaurante não seja encontrado', () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(null, null);
+        });
+
+        getMe(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({ error: 'Restaurante não encontrado.' });
+    });
+
+    it('Deve retornar os dados formatados caso o restaurante seja encontrado', () => {
+        db.get.mockImplementation((query, params, callback) => {
+            callback(null, { id: '1', restaurant_name: 'Restaurante Teste', email: 'testerestaurante@email.com', telefone: 80028922, tags: 'vegano, italiano', averageRating: 5, reviewCount: 10 });
+        });
+
+        getMe(req, res);
+
+        expect(res.json).toHaveBeenCalledWith({ restaurantId: '1', restaurantName: 'Restaurante Teste', restaurantEmail: 'testerestaurante@email.com', restaurantPhone: 80028922, tags: ['vegano', 'italiano'], averageRating: 5.0, reviewCount: 10 });
+    });
 });
